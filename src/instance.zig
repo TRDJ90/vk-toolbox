@@ -2,16 +2,13 @@ const std = @import("std");
 const builtin = @import("builtin");
 const vk = @import("vulkan");
 
-const vk_types = @import("vk_types.zig");
-const BaseWrapper = vk_types.BaseWrapper;
-const InstanceWrapper = vk_types.InstanceWrapper;
-const InstanceProxy = vk_types.InstanceProxy;
+const VulkanLoader = @import("loader.zig");
 
-const VulkanLoader = @import("loader.zig").VulkanLoader;
+const BaseWrapper = vk.BaseWrapper;
+const InstanceWrapper = vk.InstanceWrapper;
+const InstanceProxy = vk.InstanceProxy;
 
-pub fn makeVersion(major: u8, minor: u8, patch: u16) vk.Version {
-    return vk.makeApiVersion(0, @intCast(major), @intCast(minor), @intCast(patch));
-}
+const makeVersion = @import("utils.zig").makeVersion;
 
 pub const vk_api_version_1_0_0: vk.Version = makeVersion(1, 0, 0);
 pub const vk_api_version_1_1_0: vk.Version = makeVersion(1, 1, 0);
@@ -32,12 +29,13 @@ pub const InstanceConfig = struct {
     debug_callback: ?vk.PfnDebugUtilsMessengerCallbackEXT = null,
     required_extensions: []const [*:0]const u8 = &.{},
     alloc_cb: ?*vk.AllocationCallbacks = null,
-    vulkan_loader: *VulkanLoader,
+    custom_load_pfn: vk.PfnGetInstanceProcAddr,
 };
 
 pub const Instance = struct {
     handle: vk.Instance,
-    instance: *InstanceWrapper,
+    wrapper: *InstanceWrapper,
+    proxy: InstanceProxy,
     vkb: BaseWrapper,
     debug_messenger: ?vk.DebugUtilsMessengerEXT = null,
 
@@ -47,8 +45,7 @@ pub const Instance = struct {
     pub fn init(allocator: std.mem.Allocator, config: InstanceConfig) !Instance {
 
         //TODO: check out if we need to store this in the Instance struct for debugging stuff.
-        const getInstanceProcAddr = config.vulkan_loader.loadVulkanFunction(vk.PfnGetInstanceProcAddr, "vkGetInstanceProcAddr");
-        const vkb = try BaseWrapper.load(getInstanceProcAddr);
+        var vkb: BaseWrapper = BaseWrapper.load(config.custom_load_pfn);
 
         // Add desired and minimal version checks.
         var instance_version: vk.Version = vk_api_version_1_0_0;
@@ -116,13 +113,16 @@ pub const Instance = struct {
 
         // Create instance dispatcher, proxy etc.
         const handle = try vkb.createInstance(@ptrCast(&instance_ci), null);
-        const instance = try allocator.create(InstanceWrapper);
-        instance.* = try InstanceWrapper.load(handle, vkb.dispatch.vkGetInstanceProcAddr);
-        errdefer allocator.destroy(instance);
+        const wrapper = try allocator.create(vk.InstanceWrapper);
+        errdefer allocator.destroy(wrapper);
+
+        wrapper.* = vk.InstanceWrapper.load(handle, vkb.dispatch.vkGetInstanceProcAddr.?);
+        const proxy: InstanceProxy = InstanceProxy.init(handle, wrapper);
 
         return Instance{
             .handle = handle,
-            .instance = instance,
+            .proxy = proxy,
+            .wrapper = wrapper,
             .vkb = vkb,
             .api_version = api_version,
             .instance_version = instance_version,
@@ -131,11 +131,7 @@ pub const Instance = struct {
     }
     pub fn deinit(self: *const Instance, allocator: std.mem.Allocator) void {
         // Free the instance function tables
-        allocator.destroy(self.instance);
-    }
-
-    pub fn createProxy(self: *const Instance) InstanceProxy {
-        return InstanceProxy.init(self.handle, self.instance);
+        allocator.destroy(self.wrapper);
     }
 };
 
@@ -209,7 +205,7 @@ pub fn createInstance(allocator: std.mem.Allocator, config: InstanceConfig) !Ins
 
     return Instance{
         .handle = handle,
-        .instance = instance,
+        .proxy = instance,
         .api_version = api_version,
         .instance_version = instance_version,
         .debug_messenger = null,
@@ -253,3 +249,24 @@ const InstanceInfo = struct {
         return false;
     }
 };
+
+pub fn getInstanceSurfaceExtensions(extensions_list: *std.ArrayList([*:0]const u8)) !void {
+    // Add OS specific instance extensions.
+    switch (builtin.target.os.tag) {
+        .macos => {
+            try extensions_list.append(vk.extensions.ext_metal_surface.name);
+            try extensions_list.append(vk.extensions.khr_portability_enumeration.name);
+        },
+        .windows => {
+            try extensions_list.append(vk.extensions.khr_win_32_surface.name);
+        },
+        .linux => {
+            try extensions_list.append(vk.extensions.khr_xcb_surface.name);
+            try extensions_list.append(vk.extensions.khr_xlib_surface.name);
+            try extensions_list.append(vk.extensions.khr_wayland_surface.name);
+        },
+        else => {
+            std.log.err("Unsupported platform/os", .{});
+        },
+    }
+}

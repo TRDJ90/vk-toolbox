@@ -1,0 +1,22 @@
+.{
+    .name = .test_bed,
+    .version = "0.0.1",
+    .fingerprint = 0x9f3a20385e2fc7a7,
+    .minimum_zig_version = "0.14.0",
+
+    .dependencies = .{
+        .vulkan_toolbox = .{
+            .path = "..",
+        },
+        .zglfw = .{
+            .url = "git+https://github.com/zig-gamedev/zglfw#dcb1dae7d4a90f88b70dbae73300ab9b19fb250c",
+            .hash = "zglfw-0.10.0-dev-zgVDNJmZIQCIiO_94Sp5jqrPtz4Eumk3bDcxS7dSZfIj",
+        },
+    },
+
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
