@@ -169,3 +169,12 @@ pub const Device = struct {
         return error.NoSuitableMemoryType;
     }
 };
+
+pub fn findMemoryTypeIndex(memory_properties: vk.PhysicalDeviceMemoryProperties, type_filter: u32, flags: vk.MemoryPropertyFlags) !u32 {
+    for (memory_properties.memory_types[0..memory_properties.memory_type_count], 0..) |mem_type, i| {
+        if (type_filter & (@as(u32, 1) << @truncate(i)) != 0 and mem_type.property_flags.contains(flags)) {
+            return @truncate(i);
+        }
+    }
+    return error.NoSuitableMemoryType;
+}

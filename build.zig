@@ -12,12 +12,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
 
-    // const vk_toolbox_lib = b.addLibrary(std.Build.LibraryOptions{
-    //     .name = "vk-toolbox",
-    //     .root_module = toolbox_mod,
-    //     .linkage = .static,
-    // });
-
     var registry_path: LazyPath = undefined;
     if (maybe_registery) |registry| {
         registry_path = registry;
@@ -33,7 +27,10 @@ pub fn build(b: *std.Build) void {
         .root_source_file = vulkan_gen_cmd.addOutputFileArg("vk.zig"),
     });
 
+    const vma = b.dependency("vma", .{});
+
     toolbox_mod.addImport("vulkan", vulkan_zig);
+    toolbox_mod.addImport("vma", vma.module("vma"));
 
     const lib_unit_tests = b.addTest(.{
         .root_module = toolbox_mod,

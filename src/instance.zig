@@ -34,6 +34,7 @@ pub const InstanceConfig = struct {
 
 pub const Instance = struct {
     handle: vk.Instance,
+    base: BaseWrapper,
     wrapper: *InstanceWrapper,
     proxy: InstanceProxy,
     vkb: BaseWrapper,
@@ -121,6 +122,7 @@ pub const Instance = struct {
 
         return Instance{
             .handle = handle,
+            .base = vkb,
             .proxy = proxy,
             .wrapper = wrapper,
             .vkb = vkb,

@@ -1,7 +1,7 @@
 const std = @import("std");
 const vk = @import("vulkan");
 
-const Device = @import("vk-toolbox").Device;
+const DeviceProxy = vk.DeviceProxy;
 
 pub const Image = struct {
     handle: vk.Image,
@@ -24,7 +24,7 @@ pub const Image = struct {
     has_views: bool,
 
     pub fn init(
-        device: Device,
+        device: DeviceProxy,
         width: u32,
         height: u32,
         format: vk.Format,
@@ -59,8 +59,8 @@ pub const Image = struct {
             .image_type = vk.ImageType.@"2d",
         };
 
-        image.handle = try device.proxy.createImage(&image.image_create_info, null);
-        image.memory_requirements = device.proxy.getImageMemoryRequirements(image.handle);
+        image.handle = try device.createImage(&image.image_create_info, null);
+        image.memory_requirements = device.getImageMemoryRequirements(image.handle);
 
         // Get memory requirements.
         const memory_type_index = try device.findMemoryTypeIndex(image.memory_requirements.memory_type_bits, memory_flags);
@@ -94,22 +94,22 @@ pub const Image = struct {
                 .subresource_range = image.view_subresource_range.?,
                 .components = std.mem.zeroes(vk.ComponentMapping),
             };
-            image.view = try device.proxy.createImageView(&image.view_create_info.?, null);
+            image.view = try device.createImageView(&image.view_create_info.?, null);
         }
         return image;
     }
 
-    pub fn deinit(self: *const Image, device: Device) void {
+    pub fn deinit(self: *const Image, device: DeviceProxy) void {
         if (self.view) |view| {
-            device.device.destroyImageView(view, null);
+            device.destroyImageView(view, null);
         }
 
         if (self.memory != .null_handle) {
-            device.device.freeMemory(self.memory, null);
+            device.freeMemory(self.memory, null);
         }
 
         if (self.handle != .null_handle) {
-            device.device.destroyImage(self.handle, deinit);
+            device.destroyImage(self.handle, deinit);
         }
     }
 
